@@ -1,0 +1,88 @@
+---
+meta:
+  title: How to integrate with Cockpit to monitor your Mac Mini
+  description: This page explains how to install a monitoring agent on your Mac Mini in order to send metrics to Cockpit.
+content:
+  h1: How to install a monitoring agent on your Mac Mini in order to send metrics to Cockpit
+  paragraph: This page explains how to install a monitoring agent on a Scaleway Mac Mini in order to send metrics to Scaleway Cockpit.
+tags: apple-silicon, cockpit, metrics, monitoring, mac-mini, mac-mini-m1, mac-mini-m2
+dates:
+  posted: 2024-08-23
+categories:
+  - bare-metal
+---
+
+<Macro id="requirements" />
+
+- A Scaleway account logged into the [console](https://console.scaleway.com)
+- [Owner](/identity-and-access-management/iam/concepts/#owner) status or [IAM permissions](/identity-and-access-management/iam/concepts/#permission) allowing you to perform actions in the intended Organization
+- An [SSH key](/identity-and-access-management/organizations-and-projects/how-to/create-ssh-key/)
+- A [Mac mini](/bare-metal/apple-silicon/how-to/create-mac-mini/)
+- [Homebrew](/bare-metal/apple-silicon/how-to/install-package-manager-mac-mini) package manager
+
+
+<Message type="note">
+  Official documentation : https://docs.influxdata.com/telegraf/v1/install/?t=macOS
+</Message>
+
+1. Install Telegraf agent
+```bash
+brew update && brew install telegraf
+````
+
+2. Edit telegraf config file `/opt/homebrew/etc/telegraf.conf`:
+  - configure relevent metrics (`[inputs.*]` sections, for exemple `[inputs.cpu]`)
+  - configure the output (for sending metrics to **Cockpit** )
+    - Use `[outputs.http]`
+
+```
+		[[outputs.http]]
+#   ## URL is the address to send metrics to
+url = "https://api_key:$API_KEY@metrics.cockpit.fr-par.scw.cloud/api/v1/push"
+#
+#   ## HTTP method, one of: "POST" or "PUT" or "PATCH"
+method = "POST"
+#
+#   ## Data format to output.
+#   ## Each data format has it's own unique set of configuration options, read
+#   ## more about them here:
+#   ## https://github.com/influxdata/telegraf/blob/master/docs/DATA_FORMATS_OUTPUT.md
+data_format = "prometheusremotewrite"
+#
+#   ## HTTP Content-Encoding for write request body, can be set to "gzip" to
+#   ## compress body or "identity" to apply no encoding.
+content_encoding = "identity"
+```
+  - use tags to differentiate the different data sources with the
+    `[global_tags]` section, you can use envirenment variable or simply set tag
+    names and values as you see fit:
+```
+# Global tags can be specified here in key="value" format.
+[global_tags]
+  # dc = "us-east-1" # will tag all metrics with dc=us-east-1
+  # rack = "1a"
+  ## Environment variables can be used as tags, and throughout the config file
+ user = "$USER"
+```
+
+3. Create a [cockpit token](/observability/cockpit/how-to/create-token)
+
+  - Make sure to select `metrics`
+
+4. Running telegraf
+
+  - configure the services environment variable to define the `API_KEY` and make it accessible to the telegraf service:
+
+```
+launchctl setenv API_KEY <YOUR_TOKEN>
+```
+
+  - run the telegraf background service:
+
+```
+brew services start telegraf
+```
+
+<Message type="note">
+service' logs are written tor `/opt/homebrew/var/log/telegraf.log`
+</Message>
